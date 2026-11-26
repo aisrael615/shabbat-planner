@@ -21,3 +21,7 @@ button.primary{background:var(--green);color:#fff;border-color:var(--green)}butt
 .item{display:grid;grid-template-columns:4.5rem 1fr;gap:8px;border-bottom:1px solid var(--line);padding:8px 0}.item time{font-variant-numeric:tabular-nums;color:var(--green);font-weight:650}.item small{display:block;font-size:.86rem;color:var(--muted)}
 .marker{font-weight:600}.existing{color:var(--muted)}#review{margin-top:16px}#validation{color:var(--danger);font-weight:650}.hint{font-size:.88rem;margin:.2rem 0;color:var(--muted)}footer{font-size:.875rem;color:var(--muted);padding:18px 0}a{color:var(--green)}
 @media(max-width:720px){.layout{grid-template-columns:1fr}.connection{grid-template-columns:1fr}.connection button{justify-self:start}}
+.connection #connectPanel,.connection #githubStatus{grid-column:1/-1}
+.connection #githubStatus:empty{display:none}
+button:disabled{opacity:.6;cursor:default}
+[hidden]{display:none!important}

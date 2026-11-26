@@ -1,4 +1,5 @@
 import { slots, events, minutes, clock, timePattern } from './plan.mjs';
+import { latest, runWorkflow, workflowUrl } from './github.mjs';
 
 const $ = id => document.getElementById(id);
 const zone='Asia/Jerusalem';
@@ -7,6 +8,12 @@ const formatTime=new Intl.DateTimeFormat('en-GB',{timeZone:zone,hour:'2-digit',m
 const days=['Friday','Saturday'];
 const codes=['FR','SA'];
 const key='shabbat-planner-v1';
+const tokenKey='shabbat-github-token-v1';
+let token='';
+try { token=sessionStorage.getItem(tokenKey) || localStorage.getItem(tokenKey) || ''; } catch { /* Storage is optional. */ }
+let busy=false;
+let pendingUrl='';
+let submitted=false;
 let saved={};
 try { saved=JSON.parse(localStorage.getItem(key) || '{}'); } catch { /* Start with a clean editor. */ }
 let snapshot=saved.snapshot;
@@ -180,20 +187,92 @@ function toggleImport(show) {
   if(show) $('workflow').focus();
 }
 function connection(message) {
-  $('connection').textContent=message ?? (snapshot ? 'Alexa snapshot · '+new Date(snapshot.fetchedAt).toLocaleString('en-IL',{timeZone:zone}) : 'Import a snapshot to see what Alexa is scheduled to run.');
+  $('connection').textContent=message ?? (snapshot ? 'Alexa snapshot · '+new Date(snapshot.fetchedAt).toLocaleString('en-IL',{timeZone:zone}) : 'Connect GitHub to load your current Alexa schedule.');
 }
-$('workflow').value=saved.workflow ?? new URLSearchParams(location.search).get('workflow') ?? '';
+function loadSnapshot(data) {
+  if(!/^[a-f\d]{64}$/.test(data?.revision)||!Number.isFinite(Date.parse(data.fetchedAt))||
+    !Array.isArray(data.current)||!Array.isArray(data.shared)||!data.defaults) throw Error('The snapshot did not contain a valid Alexa schedule.');
+  const initial=!snapshot;
+  const changed=snapshot?.revision!==data.revision;
+  snapshot=data;
+  if(initial) { settings=defaults();renderEditor(); }
+  connection();
+  persist();
+  render();
+  return changed;
+}
+function connectedUi() {
+  $('connectToggle').textContent=token?'GitHub connection':'Connect GitHub';
+  $('refresh').hidden=!token;
+  $('disconnect').hidden=!token;
+  $('refresh').disabled=busy;
+  $('disconnect').disabled=busy;
+  $('connectPanel').querySelector('[type=submit]').disabled=busy;
+  $('applyAlexa').textContent=token?'Apply to Alexa':'Connect GitHub to apply';
+  $('applyAlexa').disabled=busy || submitted || Boolean(pendingUrl);
+}
+function toggleConnect(show) {
+  $('connectPanel').hidden=!show;
+  $('connectToggle').setAttribute('aria-expanded',String(show));
+  if(show) $('githubToken').focus();
+}
+function saveToken(value,remember=false) {
+  token=value;
+  try {
+    sessionStorage.removeItem(tokenKey);
+    localStorage.removeItem(tokenKey);
+    if(value) (remember ? localStorage : sessionStorage).setItem(tokenKey,value);
+  } catch { /* Keep the current connection in memory. */ }
+}
+function showRun(url) {
+  $('runLink').href=url;
+  $('runLink').hidden=false;
+}
+async function refreshAlexa({live=false}={}) {
+  if(!token || busy) return;
+  busy=true;connectedUi();
+  $('githubStatus').textContent='Loading your Alexa schedule…';
+  try {
+    const data=live ? null : await latest(token);
+    if(data && loadSnapshot(data)) $('review').hidden=true;
+    if(live || !data) {
+      const result=await runWorkflow(token,'snapshot',null,()=>{ $('githubStatus').textContent='Reading Alexa through GitHub Actions…'; });
+      if(result.error) throw Error(result.error);
+      if(loadSnapshot(result.snapshot)) $('review').hidden=true;
+    }
+    pendingUrl='';
+    $('githubStatus').textContent='GitHub connected.';
+  } catch(error) { $('githubStatus').textContent=error.message; }
+  finally {busy=false;connectedUi();}
+}
+$('workflow').value=saved.workflow || workflowUrl;
+$('connectToggle').addEventListener('click',()=>toggleConnect($('connectPanel').hidden));
+$('connectPanel').addEventListener('submit',event=>{
+  event.preventDefault();
+  if(busy) return;
+  const value=$('githubToken').value.trim();
+  if(!/^github_pat_[A-Za-z0-9_]+$/.test(value)) {
+    $('githubStatus').textContent='Enter a fine-grained GitHub token that starts with github_pat_.';
+    return;
+  }
+  saveToken(value,$('remember').checked);
+  $('githubToken').value='';
+  toggleConnect(false);
+  refreshAlexa();
+});
+$('disconnect').addEventListener('click',()=>{
+  saveToken('');
+  toggleConnect(false);
+  $('githubStatus').textContent='GitHub disconnected.';
+  connectedUi();
+});
+$('refresh').addEventListener('click',()=>refreshAlexa({live:true}));
 $('workflow').addEventListener('input',()=>{links();persist();});
 $('importToggle').addEventListener('click',()=>toggleImport($('importPanel').hidden));
 $('import').addEventListener('click',()=>{
   try{
-    const data=JSON.parse($('snapshot').value);
-    if(!/^[a-f\d]{64}$/.test(data.revision)||!Number.isFinite(Date.parse(data.fetchedAt))||
-      !Array.isArray(data.current)||!Array.isArray(data.shared)||!data.defaults) throw Error();
-    const initial=!snapshot;
-    snapshot=data;
-    if(initial) { settings=defaults();renderEditor(); }
-    $('snapshot').value='';connection();toggleImport(false);updated();
+    loadSnapshot(JSON.parse($('snapshot').value));
+    $('snapshot').value='';toggleImport(false);updated();
   }catch{connection('Could not read that snapshot. Copy the complete JSON from the private workflow’s Summary.');}
 });
 for(const button of document.querySelectorAll('[data-view]')) button.addEventListener('click',()=>{
@@ -205,15 +284,44 @@ $('editor').addEventListener('submit',event=>{
   event.preventDefault();
   try{
     const draft=events(settings);
-    if(!snapshot){toggleImport(true);throw Error('Import an Alexa snapshot before preparing Apply.');}
+    if(!snapshot){toggleConnect(true);throw Error('Connect GitHub and load an Alexa snapshot before preparing Apply.');}
     if(!workflowPattern.test($('workflow').value.trim())){toggleImport(true);throw Error('Enter your private GitHub workflow URL first.');}
     const existing=new Set(snapshot.current.filter(row=>row.enabled).map(row=>row.key));
     timeline($('reviewList'),draft.filter(item=>item.enabled||existing.has(item.key)).map(item=>({...item,disabled:!item.enabled})));
     $('payload').value=JSON.stringify({revision:snapshot.revision,settings});
     $('copyStatus').textContent='';
+    $('applyStatus').textContent='';
+    submitted=false;
+    connectedUi();
     $('review').hidden=false;
     $('reviewTitle').focus();
   }catch(error){$('validation').textContent=error.message;}
+});
+$('applyAlexa').addEventListener('click',async()=>{
+  if(!token){toggleConnect(true);return;}
+  if(busy || pendingUrl) return;
+  busy=true;connectedUi();
+  $('applyStatus').textContent='Sending the reviewed schedule to GitHub…';
+  $('runLink').hidden=true;
+  try {
+    const result=await runWorkflow(token,'apply',$('payload').value,url=>{
+      pendingUrl=url;
+      submitted=true;
+      showRun(url);
+      $('applyStatus').textContent='Waiting for Alexa to confirm the changes…';
+    });
+    pendingUrl='';
+    if(result.snapshot) loadSnapshot(result.snapshot);
+    const count=result.verified?.length ?? 0;
+    $('applyStatus').textContent=result.error ? `${count} confirmed. ${result.error}`
+      : count ? `Alexa confirmed ${count} change${count===1?'':'s'}.` : 'Alexa confirmed no changes were needed.';
+    if(result.snapshot) {
+      view='current';
+      for(const tab of document.querySelectorAll('[data-view]')) tab.setAttribute('aria-pressed',String(tab.dataset.view==='current'));
+      render();
+    }
+  } catch(error) { $('applyStatus').textContent=error.message; }
+  finally {busy=false;connectedUi();}
 });
 $('copy').addEventListener('click',async()=>{
   try{await navigator.clipboard.writeText($('payload').value);$('copyStatus').textContent='Apply JSON copied.';}
@@ -239,7 +347,8 @@ async function shabbatTimes() {
 }
 setWeek();
 settings=settings ?? defaults();
-links();connection();renderEditor();renderContext();render();
+links();connection();renderEditor();renderContext();render();connectedUi();
+if(token) refreshAlexa();
 shabbatTimes().then(()=>{renderContext();render();}).catch(()=>{});
 get('https://api.open-meteo.com/v1/forecast?latitude=31.61&longitude=34.77&current=temperature_2m&daily=temperature_2m_max,temperature_2m_min&timezone=Asia%2FJerusalem&forecast_days=9&past_days=1')
   .then(data=>{forecast=data;renderContext();}).catch(()=>{});
