@@ -19,7 +19,7 @@ export function events(settings) {
     const day = ac ? first : row.day;
     if (!ac && day !== 0 && day !== 1) throw Error(`Choose a day for ${label}`);
     if (!timePattern.test(row.start) || (ac && !timePattern.test(row.end))) throw Error(`Enter valid times for ${label}`);
-    if (ac && (!Number.isInteger(row.temp) || row.temp < 16 || row.temp > 30 ||
+    if (ac && (typeof row.temp !== 'number' || !Number.isInteger(row.temp*2) || row.temp < 16 || row.temp > 30 ||
         !Number.isInteger(row.fan) || row.fan < 0 || row.fan > 100)) throw Error(`Check the temperature and fan for ${label}`);
     output.push({key: ac ? key+'On' : key,label: ac ? label+' AC on' : label,day,time:row.start,enabled:row.enabled,...(ac ? {temp:row.temp,fan:row.fan} : {})});
     if (ac) {

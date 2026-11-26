@@ -47,6 +47,11 @@ function setWeek(next=false) {
   saturday.setUTCDate(saturday.getUTCDate()+1);
   week=[friday,saturday];
 }
+function celsius(value) {
+  // Older snapshots mixed Fahrenheit values into the Celsius field.
+  if(value>=61 && value<=86) return Math.round((value-32)*10/9)/2;
+  return typeof value==='number' && value>=16 && value<=30 ? value : 23;
+}
 function defaults() {
   const current = name => snapshot?.current.find(row=>row.key===name);
   const seed=snapshot?.defaults ?? {};
@@ -60,7 +65,7 @@ function defaults() {
     const start=first?.time ?? (id==='dinner' ? base[id][0] : source.time) ?? (ac ? base[id][0] : fallback[id]);
     if (!ac) return [id,{start,day: first ? (first.days.includes('SA')?1:0) : day,enabled:first?.enabled ?? false}];
     return [id,{start,end:last?.time ?? seed[id+'Off']?.time ?? base[id][1],
-      enabled:first?.enabled ?? false,temp:first?.temp ?? source.temp ?? 23,fan:first?.fan ?? source.fan ?? 60,
+      enabled:first?.enabled ?? false,temp:celsius(first?.temp ?? source.temp),fan:first?.fan ?? source.fan ?? 60,
       ...(id==='dinner' ? {startOffset:60,endOffset:150} : {})}];
   }));
 }
@@ -108,7 +113,7 @@ function renderEditor(open) {
       fields.append(field('Day',select));
     }
     fields.append(input(id,'start',ac?'Starts':'Time','time'));
-    if(ac) fields.append(input(id,'end','Ends','time'),input(id,'temp','Temperature °C','number',{min:16,max:30}),
+    if(ac) fields.append(input(id,'end','Ends','time'),input(id,'temp','Temperature °C','number',{min:16,max:30,step:0.5}),
       input(id,'fan','Fan % (0 is auto if supported)','number',{min:0,max:100}));
     if(id==='dinner') {
       fields.append(input(id,'startOffset','Start offset from candle lighting (min)','number'),
@@ -347,6 +352,7 @@ async function shabbatTimes() {
 }
 setWeek();
 settings=settings ?? defaults();
+for (const [id,,kind] of slots) if(kind==='ac' && settings[id]) settings[id].temp=celsius(settings[id].temp);
 links();connection();renderEditor();renderContext();render();connectedUi();
 if(token) refreshAlexa();
 shabbatTimes().then(()=>{renderContext();render();}).catch(()=>{});
