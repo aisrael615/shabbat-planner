@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#162c25">
+  <title>Shabbat Planner</title>
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.mjs"></script>
+</head>
+<body>
+<header>
+  <div class="container">
+    <p class="place">Kiryat Gat · Israel</p>
+    <h1>Shabbat Planner</h1>
+    <p class="lede">Set your home’s schedule for Shabbat.</p>
+    <div id="weekend" class="weekend" aria-live="polite"></div>
+  </div>
+</header>
+<main class="container">
+  <section class="panel connection">
+    <div><h2>Alexa schedule</h2><p id="connection">Import a snapshot to see what Alexa is scheduled to run.</p></div>
+    <button type="button" id="importToggle" aria-controls="importPanel" aria-expanded="false">Import snapshot</button>
+    <div id="importPanel" hidden>
+      <p><a class="workflowLink" target="_blank" rel="noopener noreferrer">Open your workflow</a>, run <strong>snapshot</strong>, and paste the JSON from its Summary.</p>
+      <label for="workflow">Private GitHub workflow URL</label>
+      <input type="url" id="workflow" placeholder="https://github.com/owner/repo/actions/workflows/shabbat.yml">
+      <label for="snapshot">Snapshot JSON</label>
+      <textarea id="snapshot" rows="4" spellcheck="false"></textarea>
+      <button id="import" type="button">Load snapshot</button>
+    </div>
+  </section>
+  <div class="layout">
+    <form id="editor" class="panel">
+      <h2>Set the schedule</h2>
+      <p>Enabled actions repeat each week in Alexa after you apply them.</p>
+      <h3>Air conditioning</h3>
+      <div id="ac"></div>
+      <h3>Blinds and couch</h3>
+      <div id="devices"></div>
+      <p id="validation" role="status"></p>
+      <button class="primary" type="submit">Review changes</button>
+    </form>
+    <section class="panel">
+      <h2>Timeline</h2>
+      <div class="tabs" role="group" aria-label="Timeline view">
+        <button type="button" data-view="current" aria-pressed="false">In Alexa</button>
+        <button type="button" data-view="draft" aria-pressed="true">Draft</button>
+      </div>
+      <div id="timeline"></div>
+    </section>
+  </div>
+  <section class="panel" id="review" hidden aria-labelledby="reviewTitle">
+    <h2 id="reviewTitle" tabindex="-1">Review changes</h2>
+    <div id="reviewList"></div>
+    <p>In GitHub, tap <strong>Run workflow</strong>, choose <strong>apply</strong>, and paste the JSON. Check the run Summary for verified changes and a fresh snapshot.</p>
+    <label for="payload">Apply JSON</label>
+    <textarea id="payload" readonly rows="4" spellcheck="false"></textarea>
+    <div class="buttons"><button id="copy" class="primary" type="button">Copy Apply JSON</button><a class="workflowLink" target="_blank" rel="noopener noreferrer">Open GitHub Actions</a></div>
+    <p id="copyStatus" role="status"></p>
+  </section>
+  <footer>Weather from <a href="https://open-meteo.com/">Open-Meteo</a> · Shabbat times from <a href="https://www.hebcal.com/">Hebcal</a></footer>
+</main>
+</body>
+</html>
