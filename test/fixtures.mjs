@@ -2,7 +2,7 @@ import { deflateRawSync } from 'node:zlib';
 
 export const snapshot = {
   version:1,revision:'a'.repeat(64),fetchedAt:'2026-11-27T10:00:00Z',
-  current:[],shared:[],defaults:{},
+  current:[],shared:[],defaults:{},conflictRoutines:[],
 };
 export const dinnerRows = [
   {key:'dinnerOn',name:'Shabbat Planner - dinnerOn',time:'18:30',days:['FR'],enabled:true,temp:23,fan:60},

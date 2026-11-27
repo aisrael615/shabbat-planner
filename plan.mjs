@@ -34,6 +34,37 @@ export function reviewChanges(draft,current,defaults) {
   });
 }
 
+export function conflictChanges(draft,routines) {
+  const enabled=draft.filter(event=>event.enabled);
+  const days=['FR','SA'];
+  const point=(day,time)=>day*1440+minutes(time);
+  return routines.flatMap(routine=>{
+    const relevant=enabled.filter(event=>routine.actions.some(action=>{
+      if(action.group==='ac') return event.temp!==undefined;
+      return event.key.startsWith(action.group);
+    }));
+    if(!relevant.length) return [];
+    if(!routine.editable) return [{...routine,change:'review'}];
+    const remove=routine.days.filter(day=>{
+      const index=days.indexOf(day);
+      if(index<0) return false;
+      return relevant.some(event=>{
+        if(routine.actions.some(action=>action.group==='ac')) {
+          const end=draft.find(end=>end.key===event.key.replace(/On$/,'Off'));
+          const at=point(index,routine.time);
+          return at>=point(event.day,event.time) && at<=point(end.day,end.time);
+        }
+        const verb=event.key.match(/(Open|Close|On|Off)$/)?.[0].toLowerCase();
+        return event.day===index && (routine.actions.some(action=>action.verb===verb) || event.time<=routine.time);
+      });
+    });
+    if(!remove.length) return [];
+    const keep=routine.days.filter(day=>!remove.includes(day));
+    if(keep.length && routine.canTrim===false) return [{...routine,change:'review'}];
+    return [{...routine,change:keep.length?'trim':'delete',remove,keep}];
+  }).sort((a,b)=>a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+}
+
 export function events(settings) {
   if(!settings || typeof settings!=='object' || Array.isArray(settings) ||
     Object.keys(settings).some(key=>!slots.some(slot=>slot[0]===key))) throw Error('Schedule contains an unsupported device or period');

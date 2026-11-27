@@ -3,8 +3,11 @@ import { artifact, dinnerRows, saved, snapshot } from './fixtures.mjs';
 
 const fakeToken='github_pat_example_for_test';
 const api='https://api.github.com/repos/aisrael615/shabbat-dashboard/actions/**';
-async function mock(context,{partial=false,firstStatus=200}={}) {
+async function mock(context,{partial=false,firstStatus=200,withConflict=false}={}) {
   const state={dispatches:0,hold:false,interrupt:false,firstStatus};
+  const initial=withConflict?{...snapshot,conflictRoutines:[
+    {id:'daily-ac',name:'Daily AC off',time:'19:00',days:['SU','MO','TU','WE','TH','FR','SA'],actions:[{group:'ac',verb:'off'}],editable:true},
+  ]}:snapshot;
   const cors={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET, POST, OPTIONS'};
   await context.route('https://www.hebcal.com/**',route=>route.fulfill({json:{items:[]},headers:cors}));
   await context.route('https://api.open-meteo.com/**',route=>route.fulfill({json:{current:{temperature_2m:23}},headers:cors}));
@@ -22,6 +25,7 @@ async function mock(context,{partial=false,firstStatus=200}={}) {
         const plan=JSON.parse(request.inputs.plan);
         expect(plan.settings.dinner).toMatchObject({enabled:true,start:'18:30',end:'20:00',temp:23,fan:60});
         expect(plan.revision).toBe(snapshot.revision);
+        expect(plan.conflictIds).toEqual(withConflict?['daily-ac']:[]);
       }
       return send({workflow_run_id:request.inputs.mode==='snapshot'?43:42});
     }
@@ -30,7 +34,7 @@ async function mock(context,{partial=false,firstStatus=200}={}) {
     if(path.endsWith('/runs/43')) return send({status:'completed',conclusion:'success'});
     if(path.endsWith('/runs/42/artifacts')) return send({artifacts:[{id:2,workflow_run:{id:42}}]});
     if(path.endsWith('/runs/43/artifacts')) return send({artifacts:[{id:1,workflow_run:{id:43}}]});
-    if(path.endsWith('/artifacts/1/zip')) return zip({version:1,verified:[],snapshot});
+    if(path.endsWith('/artifacts/1/zip')) return zip({version:1,verified:[],snapshot:initial});
     if(path.endsWith('/artifacts/2/zip')) return zip(partial?{
       version:1,snapshot:{...saved,current:[dinnerRows[1]]},verified:[dinnerRows[1]],
       operations:[{label:'Friday dinner AC off',status:'confirmed'},{label:'Friday dinner AC on',status:'not_attempted'}],
@@ -99,7 +103,7 @@ test('loads after a permission error and reports a partial result from the actua
   await expect(page.locator('#timeline')).not.toContainText('Friday dinner AC on');
 });
 
-test('resumes after losing the connection and prevents an older manual import from replacing live state',async ({page,context})=>{
+test('resumes after losing the connection and prevents an older refresh from replacing live state',async ({page,context})=>{
   const state=await mock(context);
   await connect(page);
   await expect(page.locator('#githubStatus')).toHaveText('GitHub connected.');
@@ -110,9 +114,24 @@ test('resumes after losing the connection and prevents an older manual import fr
   state.interrupt=false;
   await page.getByRole('button',{name:'Check Apply status'}).click();
   await expect(page.locator('#applyStatus')).toHaveText('Alexa confirmed 2 changes.');
-  await page.getByRole('button',{name:'Import snapshot'}).click();
-  await page.getByLabel('Snapshot JSON').fill(JSON.stringify(snapshot));
-  await page.getByRole('button',{name:'Load snapshot'}).click();
+  await page.getByRole('button',{name:'Refresh Alexa'}).click();
+  await expect(page.locator('#githubStatus')).toHaveText('GitHub connected.');
   await expect(page.locator('#timeline')).toContainText('Friday dinner AC on');
+  expect(state.dispatches).toBe(2);
+});
+
+test('shows reviewed conflict removals before permitting Apply, without exposing JSON',async ({page,context})=>{
+  const state=await mock(context,{withConflict:true});
+  await connect(page);
+  await expect(page.locator('#githubStatus')).toHaveText('GitHub connected.');
+  await review(page);
+  await expect(page.locator('#conflictList')).toHaveText('Remove Friday only · Daily AC off');
+  await expect(page.locator('textarea')).toHaveCount(0);
+  const apply=page.getByRole('button',{name:'Apply to Alexa',exact:true});
+  await expect(apply).toBeDisabled();
+  expect(state.dispatches).toBe(0);
+  await page.getByRole('checkbox',{name:'I approve the listed routine removals'}).check();
+  await apply.click();
+  await expect(page.locator('#applyStatus')).toHaveText('Alexa confirmed 2 changes.');
   expect(state.dispatches).toBe(1);
 });

@@ -20,12 +20,11 @@
 </header>
 <main class="container">
   <section class="panel connection">
-    <div><h2>Alexa schedule</h2><p id="connection">Import a snapshot to see what Alexa is scheduled to run.</p></div>
+    <div><h2>Alexa schedule</h2><p id="connection">Connect GitHub to load your Alexa schedule.</p></div>
     <div class="buttons">
       <button type="button" id="connectToggle" aria-controls="connectPanel" aria-expanded="false">Connect GitHub</button>
       <button type="button" id="refresh" hidden>Refresh Alexa</button>
       <button type="button" id="resume" hidden>Check Apply status</button>
-      <button type="button" id="importToggle" aria-controls="importPanel" aria-expanded="false">Import snapshot</button>
     </div>
     <form id="connectPanel" hidden>
       <p>Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">fine-grained GitHub token</a>. Select <strong>Only select repositories</strong>, choose the private <strong>shabbat-dashboard</strong> repository, and give it <strong>Actions: Read and write</strong>. Remember it only on a device you trust.</p>
@@ -35,14 +34,6 @@
       <div class="buttons"><button class="primary" type="submit">Connect</button><button type="button" id="disconnect" hidden>Disconnect</button></div>
     </form>
     <p id="githubStatus" role="status"></p>
-    <div id="importPanel" hidden>
-      <p><a class="workflowLink" target="_blank" rel="noopener noreferrer">Open your workflow</a>, run <strong>snapshot</strong>, and paste the JSON from its Summary.</p>
-      <label for="workflow">Private GitHub workflow URL</label>
-      <input type="url" id="workflow" placeholder="https://github.com/owner/repo/actions/workflows/shabbat.yml">
-      <label for="snapshot">Snapshot JSON</label>
-      <textarea id="snapshot" rows="4" spellcheck="false"></textarea>
-      <button id="import" type="button">Load snapshot</button>
-    </div>
   </section>
   <div class="layout">
     <form id="editor" class="panel">
@@ -67,17 +58,14 @@
   <section class="panel" id="review" hidden aria-labelledby="reviewTitle">
     <h2 id="reviewTitle" tabindex="-1">Review changes</h2>
     <div id="reviewList"></div>
+    <section id="conflictReview" hidden>
+      <h3>Existing Alexa routines</h3>
+      <ul id="conflictList"></ul>
+      <label id="confirmConflictRow" hidden><input type="checkbox" id="confirmConflicts"> I approve the listed routine removals</label>
+    </section>
     <div class="buttons"><button id="applyAlexa" class="primary" type="button">Apply to Alexa</button><a id="runLink" target="_blank" rel="noopener noreferrer" hidden>View GitHub run</a></div>
     <p id="applyStatus" role="status"></p>
     <ul id="outcomes"></ul>
-    <details>
-      <summary>Apply manually in GitHub</summary>
-      <p>In GitHub, tap <strong>Run workflow</strong>, choose <strong>apply</strong>, and paste the JSON.</p>
-      <label for="payload">Apply JSON</label>
-      <textarea id="payload" readonly rows="4" spellcheck="false"></textarea>
-      <div class="buttons"><button id="copy" type="button">Copy Apply JSON</button><a class="workflowLink" target="_blank" rel="noopener noreferrer">Open GitHub Actions</a></div>
-    </details>
-    <p id="copyStatus" role="status"></p>
   </section>
   <footer>Weather from <a href="https://open-meteo.com/">Open-Meteo</a> · Shabbat times from <a href="https://www.hebcal.com/">Hebcal</a></footer>
 </main>

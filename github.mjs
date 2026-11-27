@@ -14,6 +14,13 @@ export function validateSnapshot(data) {
     !data.current.every(item=>row(item) && typeof item.key==='string') || !data.shared.every(row) ||
     !data.defaults || typeof data.defaults!=='object' || Array.isArray(data.defaults) ||
     !Object.values(data.defaults).every(row)) throw Error('The snapshot has an unsupported or invalid format. Refresh Alexa.');
+  if(data.conflictRoutines!==undefined && (!Array.isArray(data.conflictRoutines) ||
+    data.conflictRoutines.some(item=>!item || typeof item.id!=='string' || typeof item.name!=='string' ||
+      typeof item.editable!=='boolean' || !Array.isArray(item.days) || !Array.isArray(item.actions) ||
+      item.actions.some(action=>!action || !['ac','couch','main','bedroom'].includes(action.group) || typeof action.verb!=='string') ||
+      (item.editable && !/^(?:[01]\d|2[0-3]):[0-5]\d$/.test(item.time))))) {
+    throw Error('The Alexa routine conflict list is invalid. Refresh Alexa.');
+  }
   return data;
 }
 
