@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#162c25">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src https:; object-src 'none'; base-uri 'none'; form-action 'none'">
   <title>Shabbat Planner</title>
   <link rel="stylesheet" href="./style.css">
   <script type="module" src="./app.mjs"></script>
@@ -23,10 +24,11 @@
     <div class="buttons">
       <button type="button" id="connectToggle" aria-controls="connectPanel" aria-expanded="false">Connect GitHub</button>
       <button type="button" id="refresh" hidden>Refresh Alexa</button>
+      <button type="button" id="resume" hidden>Check Apply status</button>
       <button type="button" id="importToggle" aria-controls="importPanel" aria-expanded="false">Import snapshot</button>
     </div>
     <form id="connectPanel" hidden>
-      <p>Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">fine-grained GitHub token</a> for only <strong>shabbat-dashboard</strong>, with <strong>Actions: Read and write</strong>. Enter it here on each device you use.</p>
+      <p>Create a <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener noreferrer">fine-grained GitHub token</a>. Select <strong>Only select repositories</strong>, choose the private <strong>shabbat-dashboard</strong> repository, and give it <strong>Actions: Read and write</strong>. Remember it only on a device you trust.</p>
       <label for="githubToken">GitHub token</label>
       <input type="password" id="githubToken" autocomplete="off" spellcheck="false" required>
       <label><input type="checkbox" id="remember"> Remember this token in this browser</label>
@@ -67,6 +69,7 @@
     <div id="reviewList"></div>
     <div class="buttons"><button id="applyAlexa" class="primary" type="button">Apply to Alexa</button><a id="runLink" target="_blank" rel="noopener noreferrer" hidden>View GitHub run</a></div>
     <p id="applyStatus" role="status"></p>
+    <ul id="outcomes"></ul>
     <details>
       <summary>Apply manually in GitHub</summary>
       <p>In GitHub, tap <strong>Run workflow</strong>, choose <strong>apply</strong>, and paste the JSON.</p>

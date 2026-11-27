@@ -8,17 +8,47 @@ export const slots = [
 export const timePattern = /^(?:[01]\d|2[0-3]):[0-5]\d$/;
 export const minutes = time => Number(time.slice(0, 2)) * 60 + Number(time.slice(3));
 export const clock = value => `${String(Math.floor(value / 60)).padStart(2,'0')}:${String(value % 60).padStart(2,'0')}`;
+export const israelZone='Asia/Jerusalem';
+const localDate=new Intl.DateTimeFormat('en-CA',{timeZone:israelZone,year:'numeric',month:'2-digit',day:'2-digit'});
+export function shabbatDates(now,next=false) {
+  const parts=Object.fromEntries(localDate.formatToParts(now).map(part=>[part.type,part.value]));
+  const friday=new Date(Date.UTC(Number(parts.year),Number(parts.month)-1,Number(parts.day),12));
+  const day=friday.getUTCDay();
+  friday.setUTCDate(friday.getUTCDate()+(day===6?-1:(5-day+7)%7)+(next?7:0));
+  const saturday=new Date(friday);
+  saturday.setUTCDate(saturday.getUTCDate()+1);
+  return [friday,saturday];
+}
+
+export function reviewChanges(draft,current,defaults) {
+  return draft.flatMap(event=>{
+    const previous=current.find(row=>row.key===event.key);
+    if(!event.enabled && !previous?.enabled) return [];
+    if(event.enabled && previous?.enabled && previous.name==='Shabbat Planner - '+event.key &&
+      previous.days.join(',')===(event.day===0?'FR':'SA') && previous.time===event.time &&
+      previous.timezone===israelZone && previous.weekly===true &&
+      (event.temp===undefined || (previous.temp===event.temp && previous.fan===event.fan))) return [];
+    const previousTime=!event.enabled && previous?.time;
+    return [{...event,disabled:!event.enabled,position:defaults[event.key]?.position,
+      ...(previousTime?{time:previous.time,day:previous.days.includes('SA')?1:0}:{})}];
+  });
+}
 
 export function events(settings) {
+  if(!settings || typeof settings!=='object' || Array.isArray(settings) ||
+    Object.keys(settings).some(key=>!slots.some(slot=>slot[0]===key))) throw Error('Schedule contains an unsupported device or period');
   const output = [];
   const periods = [];
   for (const [key,label,kind,first,last] of slots) {
     const row = settings?.[key];
     if (!row || typeof row.enabled !== 'boolean') throw Error(`Missing setting for ${label}`);
     const ac = kind === 'ac';
+    const fields=ac?['enabled','start','end','temp','fan',...(key==='dinner'?['startOffset','endOffset']:[])]:['enabled','start','day'];
+    if(Object.keys(row).some(field=>!fields.includes(field))) throw Error(`Unsupported setting for ${label}`);
     const day = ac ? first : row.day;
     if (!ac && day !== 0 && day !== 1) throw Error(`Choose a day for ${label}`);
-    if (!timePattern.test(row.start) || (ac && !timePattern.test(row.end))) throw Error(`Enter valid times for ${label}`);
+    if (typeof row.start!=='string' || !timePattern.test(row.start) ||
+      (ac && (typeof row.end!=='string' || !timePattern.test(row.end)))) throw Error(`Enter valid times for ${label}`);
     if (ac && (typeof row.temp !== 'number' || !Number.isInteger(row.temp*2) || row.temp < 16 || row.temp > 30 ||
         !Number.isInteger(row.fan) || row.fan < 0 || row.fan > 100)) throw Error(`Check the temperature and fan for ${label}`);
     output.push({key: ac ? key+'On' : key,label: ac ? label+' AC on' : label,day,time:row.start,enabled:row.enabled,...(ac ? {temp:row.temp,fan:row.fan} : {})});
