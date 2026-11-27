@@ -4,7 +4,7 @@ import { artifact, dinnerRows, saved, snapshot } from './fixtures.mjs';
 const fakeToken='github_pat_example_for_test';
 const api='https://api.github.com/repos/aisrael615/shabbat-dashboard/actions/**';
 async function mock(context,{partial=false,firstStatus=200}={}) {
-  const state={dispatches:0,hold:false,firstStatus};
+  const state={dispatches:0,hold:false,interrupt:false,firstStatus};
   const cors={'access-control-allow-origin':'*','access-control-allow-headers':'*','access-control-allow-methods':'GET, POST, OPTIONS'};
   await context.route('https://www.hebcal.com/**',route=>route.fulfill({json:{items:[]},headers:cors}));
   await context.route('https://api.open-meteo.com/**',route=>route.fulfill({json:{current:{temperature_2m:23}},headers:cors}));
@@ -25,7 +25,8 @@ async function mock(context,{partial=false,firstStatus=200}={}) {
       }
       return send({workflow_run_id:request.inputs.mode==='snapshot'?43:42});
     }
-    if(path.endsWith('/runs/42')) return send(state.hold?{status:'in_progress'}:{status:'completed',conclusion:partial?'failure':'success'});
+    if(path.endsWith('/runs/42')) return state.interrupt ? route.abort('internetdisconnected') :
+      send(state.hold?{status:'in_progress'}:{status:'completed',conclusion:partial?'failure':'success'});
     if(path.endsWith('/runs/43')) return send({status:'completed',conclusion:'success'});
     if(path.endsWith('/runs/42/artifacts')) return send({artifacts:[{id:2,workflow_run:{id:42}}]});
     if(path.endsWith('/runs/43/artifacts')) return send({artifacts:[{id:1,workflow_run:{id:43}}]});
@@ -96,4 +97,22 @@ test('loads after a permission error and reports a partial result from the actua
   await expect(page.locator('#outcomes')).toContainText('Not attempted · Friday dinner AC on');
   await expect(page.locator('#timeline')).toContainText('Friday dinner AC off');
   await expect(page.locator('#timeline')).not.toContainText('Friday dinner AC on');
+});
+
+test('resumes after losing the connection and prevents an older manual import from replacing live state',async ({page,context})=>{
+  const state=await mock(context);
+  await connect(page);
+  await expect(page.locator('#githubStatus')).toHaveText('GitHub connected.');
+  await review(page);
+  state.interrupt=true;
+  await page.getByRole('button',{name:'Apply to Alexa',exact:true}).click();
+  await expect(page.locator('#applyStatus')).toContainText('Could not contact GitHub');
+  state.interrupt=false;
+  await page.getByRole('button',{name:'Check Apply status'}).click();
+  await expect(page.locator('#applyStatus')).toHaveText('Alexa confirmed 2 changes.');
+  await page.getByRole('button',{name:'Import snapshot'}).click();
+  await page.getByLabel('Snapshot JSON').fill(JSON.stringify(snapshot));
+  await page.getByRole('button',{name:'Load snapshot'}).click();
+  await expect(page.locator('#timeline')).toContainText('Friday dinner AC on');
+  expect(state.dispatches).toBe(1);
 });
